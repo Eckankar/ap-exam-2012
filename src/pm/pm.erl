@@ -3,8 +3,7 @@
 %% Sebastian Paaske Tørholm <sebbe@diku.dk>
 
 -module(pm).
--export([newVanilla/0, newPrincess/1,
-         get/1, put/2, compromised/1]).
+-export([newVanilla/0, newPrincess/1, get/1, put/2, compromised/1]).
 
 %% Interface
 
@@ -62,7 +61,12 @@ vanilla_loop_set(Val, Comp) ->
 princess_loop(Pred) ->
     receive
         {put, Term} ->
-            princess_loop_set(Pred, Term);
+            try Pred(Term) of
+                true -> princess_loop_set(Pred, Term);
+                _    -> princess_loop(Pred)
+            catch
+                _    -> princess_loop(Pred)
+            end;
         {From, compromised} ->
             reply(From, false),
             princess_loop(Pred)
