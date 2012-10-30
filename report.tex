@@ -1,0 +1,80 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage[T1]{fontenc}
+
+\usepackage{amsmath,amssymb,amsfonts}
+
+\usepackage{minted}
+
+\title{Exam in Advanced Programming, 2012}
+\author{Sebastian Paaske Tørholm}
+
+\begin{document}
+\maketitle
+
+\section{IVars in Erlang}
+The IVars are modelled using Erlang processes. Each IVar starts in an empty
+state, changing to a set state once a value has been specified.
+
+Immutability is ensured by throwing away \texttt{put}-requests when in the set
+state, marking the ivar as compromised if required by the specification.
+
+For the princess variables, robustness with regards to malformed predicates in
+handled by evaluating the predicate inside a \texttt{try} clause; ignoring the
+\texttt{put} request if anything but \texttt{true} is returned, or an exception
+of any kind is thrown.
+
+The functions in \texttt{pmuse} have been solved using a simple map-reduce
+implementation. Each mapper is spawned with a mapping function, which is given
+pairs of data and an IVar to store the result in. This makes it possible
+to use the same mapper for both \texttt{pmmap} and \texttt{treeforall}.
+Distribution of problems is done in the same way that the map reduce framework
+from assignment 3 does it. Reduction is done in the original thread, and is
+thus not parallellized in any way.
+
+Order is maintained in \texttt{pmmap} by keeping a list of \texttt{IVars} in
+the correct order. These can then be queried for the computed values upon
+reducing. Values are only \texttt{put} into each IVar once in one mapping
+task, so no IVar will be compromised.
+
+Using princess predicates for \texttt{treeforall} is slightly awkward.
+If we perform a \texttt{get} on an \texttt{IVar} for which the predicate
+rejected the entry, we block the thread. This problem is resolved by using
+a custom predicate, which uses the supplied predicate on the data contained
+in values of the form \texttt{\{ok, D\}}, and always accepting values of the
+form \texttt{notok}. We then put the value we wish to check, wrapped in a
+\texttt{\{ok,D\}} first, followed by putting a \texttt{notok}. This guarantees
+us that a value will eventually be accepted. Since the order of messages
+is maintained when sending from one process to another, we know that the
+\texttt{ok}-message will be processed first. This presents no problem with
+regards to compromising the IVar, as princess IVars cannot be compromised.
+
+An exception is used to break out of the reducer as soon as a falsy value is
+found. As such, we terminate our reduction at the earliest possible point.
+
+\subsection{Assessment}
+The code tries to be indented well, using meaningful variable- and function
+names. Pattern matching is used whenever it makes sense. The supplied unit
+testing provides a good indication that the code in all likelihood satisfies
+the specification.
+
+Using \texttt{pmmap} or \texttt{treeforall} on large lists (of 100,000
+elements, for instance) may be problematic, since a process is spawned for
+each IVar, and an IVar is created for each element in the list.
+
+\appendix
+\section{Code}
+\subsection{IVars in Erlang}
+\subsubsection{pm.erl}
+\inputminted{erlang}{src/pm/pm.erl}
+\subsubsection{pmuse.erl}
+\inputminted{erlang}{src/pm/pmuse.erl}
+\subsubsection{pmtest.erl}
+\inputminted{erlang}{src/pm/pmtest.erl}
+\subsubsection{pmusetest.erl}
+\inputminted{erlang}{src/pm/pmusetest.erl}
+
+\end{document}
+
