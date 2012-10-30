@@ -9,4 +9,4 @@ import SoilAst
 
 parseString :: String -> Either Error Program
 
-parseFile :: FilePath -> Either Error Program
+parseFile :: FilePath -> IO (Either Error Program)
