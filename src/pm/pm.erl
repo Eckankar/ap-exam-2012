@@ -65,7 +65,7 @@ princess_loop(Pred) ->
                 true -> princess_loop_set(Pred, Term);
                 _    -> princess_loop(Pred)
             catch
-                _    -> princess_loop(Pred)
+                _:_  -> princess_loop(Pred)
             end;
         {From, compromised} ->
             reply(From, false),
@@ -78,8 +78,8 @@ princess_loop_set(Pred, Val) ->
             princess_loop_set(Pred, Val);
         {From, get} ->
             reply(From, Val),
-            vanilla_loop_set(Pred, Val);
+            princess_loop_set(Pred, Val);
         {From, compromised} ->
             reply(From, false),
-            vanilla_loop_set(Pred, Val)
+            princess_loop_set(Pred, Val)
     end.
