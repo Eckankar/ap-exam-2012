@@ -18,7 +18,7 @@
 		body = IfEq (Par "state") (Id "skip")
 			(Acts [
 					(Become (Id "half") [Id "return"]),
-					(SendTo [Id "SkippedMessage"] (Par "println"))]
+					(SendTo [Id "SkippingMessage"] (Id "println"))]
 			)
 			(CaseOf (Par "message") [
 				(["sender", "msg"]
