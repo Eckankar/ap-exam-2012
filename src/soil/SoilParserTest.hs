@@ -124,18 +124,25 @@ testWithFile (f, ast) =
     where file = replaceExtension f ".soil"
           filePath = replaceBaseName "examples/" file
 
+-- Does an invalid program give the correct Error?
 invalidProgramTest :: IO Test
 invalidProgramTest = return $ TestCase
                             $ assertEqual "invalid program"
                               (Left InvalidProgram)
                             $ parseString "case foo of _ : end"
 
+-- Is concat left-associative?
+concatAssocTest :: IO Test
+concatAssocTest = return $ TestCase
+                         $ assertEqual "concat associativity"
+                           (Right ([], [SendTo [] (Concat (Concat (Par "a") (Par "b")) (Par "c"))]))
+                         $ parseString "send () to a concat b concat c"
 
 fileTests :: IO Test
 fileTests = fmap TestList $ sequence $ concatMap testWithFile fileTestCases
 
 tests :: IO Test
-tests = fmap TestList $ sequence [fileTests, invalidProgramTest]
+tests = fmap TestList $ sequence [fileTests, invalidProgramTest, concatAssocTest]
 
 main :: IO Counts
 main = do t <- tests
