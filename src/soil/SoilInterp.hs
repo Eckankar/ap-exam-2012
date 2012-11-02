@@ -1,9 +1,13 @@
 --
--- Skeleton for Soil interpreter
--- To be used at the exam for Advanced Programming, B1-2012
+-- Soil interpreter
+-- Exam for Advanced Programming, B1-2012
+-- Sebastian Paaske Tørholm <sebbe@diku.dk>
 --
 
-module SoilInterp where
+module SoilInterp
+  ( runProgRR
+  , runProgAll
+  ) where
 
 import SoilAst
 import Control.Monad (void, liftM)
@@ -154,12 +158,14 @@ data ProcessState = ProS { nameEnv :: NameEnv
                          }
     deriving (Show)
 
+-- use only on values that *must* be names
 primToName :: Prim -> Name
 primToName Self         = error "Invalid use of self where name expected."
 primToName (Id _)       = error "Invalid use of identifier where name expected."
 primToName (Concat _ _) = error "Invalid use of concat where name expected."
 primToName (Par n)      = n
 
+-- gives [] if one of the identifiers in a concat resolves to 0 or 2+ values
 resolveIdent :: ProcessState -> Prim -> [Ident]
 resolveIdent _ (Id i)          = [i]
 resolveIdent ps Self           = case curPid ps of
@@ -273,10 +279,12 @@ processStep pid =
 --
 -- Part 5: Define and implement the roind-robin algorithm
 --
-nextProcessRR :: ProgramEvaluation Ident
-nextProcessRR = do p <- popProc
-                   pushProc p
-                   return $ procid p
+
+-- Not used, though it works fine; nextNonemptyProcessRR used instead
+--nextProcessRR :: ProgramEvaluation Ident
+--nextProcessRR = do p <- popProc
+--                   pushProc p
+--                   return $ procid p
 
 nextNonemptyProcessRR :: ProgramEvaluation (Maybe Ident)
 nextNonemptyProcessRR =
@@ -316,7 +324,8 @@ compileProgRR n =
                            return (so ++ sos, se ++ ses)
 
 initialPS :: [Func] -> ProgramState
-initialPS fs = let fe = FuncEnv $ map (\f -> (funcname f, f)) fs in
+initialPS fs = let fe = foldl (\e -> insertFunc e . \f -> (funcname f, f))
+                              (FuncEnv []) fs in
                PS fe initialProcessQueue
 
 evalInitialActOps :: [ActOp] -> ProgramEvaluation ()
