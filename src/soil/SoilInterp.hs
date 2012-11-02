@@ -6,13 +6,10 @@
 module SoilInterp where
 
 import SoilAst
-import SoilParser
-import Control.Monad (void)
+import Control.Monad (void, liftM)
 import Data.Maybe (fromMaybe)
 import Data.List (find, intercalate, nub, partition)
-import Control.Monad.Trans
-import Control.Monad.Trans.List
-import Debug.Trace (trace)
+import Control.Arrow ((***))
 
 --
 -- Part 1: Define a name environment
@@ -333,21 +330,27 @@ runProgRR n (fs, aops) =
 --
 -- Part 7: Implement a find all possible executions evaluator
 --
-nextProcAll :: ListT ProgramEvaluation Ident
-nextProcAll = ListT $ do PQ pq <- getProcQueue
-                         let (nep, ep) = partition hasMessages pq
-                         ListT $ return $ map procid $ case ep of
-                            []    -> nep
-                            (e:_) -> e:nep
+nextProcAll :: ProgramEvaluation [Ident]
+nextProcAll = do PQ pq <- getProcQueue
+                 let (nep, ep) = partition hasMessages pq
+                 return $ map procid $ case ep of
+                    []    -> nep
+                    (e:_) -> e:nep
 
-compileProgAll :: Int -> ListT ProgramEvaluation ([String], [String])
-compileProgAll 0 = ListT $ return [([],[])]
-compileProgAll n = do pid        <- nextProcAll
-                      (so, se)   <- lift $ processStep pid
-                      (sos, ses) <- compileProgAll (n-1)
-                      lift $ return (so ++ sos, se ++ ses)
+
+runPid :: Int -> Ident -> ProgramEvaluation [([String], [String])]
+runPid n pid = do (so, se) <- processStep pid
+                  rems     <- compileProgAll n
+                  return $ map ((so ++) *** (se ++)) rems
+
+compileProgAll :: Int -> ProgramEvaluation [([String], [String])]
+compileProgAll 0 = return [([],[])]
+compileProgAll n = do pids <- nextProcAll
+                      pq   <- getProcQueue
+                      let curState = putProcQueue pq
+                      liftM concat $ mapM ((curState >>) . runPid (n-1)) pids
 
 runProgAll :: Int -> Program -> [([String], [String])]
 runProgAll n (fs, aops) =
-    nub $ fst $ flip runPE (initialPS fs)
-        $ runListT (lift (evalInitialActOps aops) >> compileProgAll n)
+    nub $ fst $ runPE (evalInitialActOps aops >> compileProgAll n)
+                    $ initialPS fs
