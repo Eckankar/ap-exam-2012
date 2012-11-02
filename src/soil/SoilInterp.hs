@@ -321,7 +321,7 @@ compileProgRR n =
             Nothing  -> return ([], [])
             Just pid -> do (so, se)   <- processStep pid
                            (sos, ses) <- compileProgRR (n-1)
-                           return (so ++ sos, se ++ ses)
+                           return (sos ++ so, ses ++ se)
 
 initialPS :: [Func] -> ProgramState
 initialPS fs = let fe = foldl (\e -> insertFunc e . \f -> (funcname f, f))
@@ -350,7 +350,7 @@ nextProcAll = do PQ pq <- getProcQueue
 runPid :: Int -> Ident -> ProgramEvaluation [([String], [String])]
 runPid n pid = do (so, se) <- processStep pid
                   rems     <- compileProgAll n
-                  return $ map ((so ++) *** (se ++)) rems
+                  return $ map ((++ so) *** (++ se)) rems
 
 compileProgAll :: Int -> ProgramEvaluation [([String], [String])]
 compileProgAll 0 = return [([],[])]
