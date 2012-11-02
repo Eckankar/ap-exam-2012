@@ -6,9 +6,13 @@
 module SoilInterp where
 
 import SoilAst
+import SoilParser
 import Control.Monad (void)
 import Data.Maybe (fromMaybe)
-import Data.List (find, intercalate)
+import Data.List (find, intercalate, nub, partition)
+import Control.Monad.Trans
+import Control.Monad.Trans.List
+import Debug.Trace (trace)
 
 --
 -- Part 1: Define a name environment
@@ -67,6 +71,9 @@ popMessage p = case mailbox p of
                   (m:mb) ->
                      do replaceProc (procid p) $ p { mailbox = mb }
                         return (Just m)
+
+hasMessages :: Process -> Bool
+hasMessages = not . null . mailbox
 
 changeProcFunc :: Process -> Ident -> [Ident] -> Process
 changeProcFunc p f args = p { function = f , arguments = args }
@@ -281,8 +288,7 @@ nextNonemptyProcessRR =
        if hasMessages fp
        then return $ Just $ procid fp
        else loop $ procid fp
-    where hasMessages = not . null . mailbox
-          loop fpid = do p <- popProc
+    where loop fpid = do p <- popProc
                          pushProc p
                          if procid p == fpid
                          then return Nothing
@@ -312,15 +318,36 @@ compileProgRR n =
                            (sos, ses) <- compileProgRR (n-1)
                            return (so ++ sos, se ++ ses)
 
+initialPS :: [Func] -> ProgramState
+initialPS fs = let fe = FuncEnv $ map (\f -> (funcname f, f)) fs in
+               PS fe initialProcessQueue
+
+evalInitialActOps :: [ActOp] -> ProgramEvaluation ()
+evalInitialActOps aops = runExp emptyProcessState (Acts aops)
+
 runProgRR :: Int -> Program -> ([String], [String])
 runProgRR n (fs, aops) =
-    let fe    = FuncEnv $ map (\f -> (funcname f, f)) fs
-        ps    = PS fe initialProcessQueue in
-     fst $ runPE (runExp emptyProcessState (Acts aops) >> compileProgRR n) ps
+     fst $ runPE (evalInitialActOps aops >> compileProgRR n)
+               $ initialPS fs
 
 --
 -- Part 7: Implement a find all possible executions evaluator
 --
--- nextProcAll :: ...
+nextProcAll :: ListT ProgramEvaluation Ident
+nextProcAll = ListT $ do PQ pq <- getProcQueue
+                         let (nep, ep) = partition hasMessages pq
+                         ListT $ return $ map procid $ case ep of
+                            []    -> nep
+                            (e:_) -> e:nep
 
--- runProgAll :: Int -> Program -> [([String], [String])]
+compileProgAll :: Int -> ListT ProgramEvaluation ([String], [String])
+compileProgAll 0 = ListT $ return [([],[])]
+compileProgAll n = do pid        <- nextProcAll
+                      (so, se)   <- lift $ processStep pid
+                      (sos, ses) <- compileProgAll (n-1)
+                      lift $ return (so ++ sos, se ++ ses)
+
+runProgAll :: Int -> Program -> [([String], [String])]
+runProgAll n (fs, aops) =
+    nub $ fst $ flip runPE (initialPS fs)
+        $ runListT (lift (evalInitialActOps aops) >> compileProgAll n)
