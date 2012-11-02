@@ -6,10 +6,14 @@
 
 \usepackage{amsmath,amssymb,amsfonts}
 
+\usepackage{hyperref}
 \usepackage{minted}
 
 \title{Exam in Advanced Programming, 2012}
 \author{Sebastian Paaske Tørholm}
+
+\newcommand{\hoogle}[1]{\href{http://www.haskell.org/hoogle/?hoogle=#1}
+                             {\texttt{#1}}}
 
 \begin{document}
 \maketitle
@@ -64,6 +68,106 @@ Using \texttt{pmmap} or \texttt{treeforall} on large lists (of 100,000
 elements, for instance) may be problematic, since a process is spawned for
 each IVar, and an IVar is created for each element in the list.
 
+\section{Parsing Soil}
+The parsing is done using \hoogle{ReadP}.
+
+The structure of the parser construction mostly follows the structure
+suggested by the grammar. Instead of having two rules each for parameter lists
+and argument lists, these rules have been simplified using \hoogle{sepBy}.
+
+\emph{Prim} had a problem with left recursion in the rule for \texttt{concat}. This
+problem was resolved by special-casing \texttt{concat} using \hoogle{chainl1}, and
+moving the remaining rules into the nonterminal \emph{PrimBasic}.
+
+In order to allow for arbitrary whitespace, \hoogle{skipSpaces} is used whereever
+whitespace is allowed. In general, the parsers only handle whitespace in front of
+them, leaving the \texttt{program} parser to deal with trailing whitespace.
+To simplify this process, helper parsers \texttt{schar} and \texttt{sstring} have
+been introduced, as as \hoogle{char} and \hoogle{string}, that ignores arbitrary
+preceding whitespace.
+
+I have chosen to use a datatype to represent parse errors. The datatype is capable
+of representing the two types of error that can occur from parsing:
+\begin{itemize}
+    \item There are multiple ways to interpret a given source text.
+    \item The source text doesn't represent a valid program.
+\end{itemize}
+
+I'm not quite sure if the first of these can occur. It may be possible due to
+arbitrary\footnote{And thus, also 0.} whitespace being allowed between tokens.
+
+\subsection{Assessment}
+The parser has been segmented into sub-parsers, each one of a managable size,
+making it easier to inspect them for correctness. Combinators of varying
+types are used from \hoogle{ReadP}, rather than reinventing them. This yields
+shorter, more readable code. The code attempts to embrace Haskell's style, and
+has been run through HLint and ghc-mod check without any notices.
+
+The code comes with unit tests. These unit tests verify the given example
+programs against their expected parse tree. The also try to verify correct
+response to failure, and proper associativity of \texttt{concat}. The tests
+would suggest that the parser works correctly.
+
+Further correctness checking could be done using quickcheck, by generating an
+AST, serializing it to source code, re-parsing it and comparing the result to
+the original AST.
+
+\section{Interpreting Soil}
+The name and function environments are modelled using simple lists of tuples.
+This means we get a $O(n)$ lookup time, which could be improved by changing the
+datatype if necessary.
+
+The process type has been expanded to contain a process identifier, making the
+process queue a simple list. The laziness of the lists provides for asymptotically
+constant concatenation, making them perform well for the necessary operations.
+
+The program is evaluated in the \texttt{ProgramEvaluation} monad, which
+maintains a program state consisting of the function environment and process
+queue. The function environment is immutable, which is reflected in the type
+of \texttt{runPE}.
+
+Several helpful monadic values have been made, making it possible to write
+relatively clean monadic code.
+
+I have chosen to handle static errors using the \hoogle{error} function.
+This makes it easy to verify that no such error occurs in testing, and is a
+simple, lightweight and local solution to handling those error conditions
+cleanly. In addition to the static errors provided in the problem text, a
+few extra ones have been added. \texttt{primToName} throws an error if a
+non-name primitive occur in the syntax tree, where such primitives shouldn't
+be allowed. In addition, if there at any point is no process in the process
+queue when doing a round robin, \footnote{Which should be an impossibility,
+as there always should exist at least two processes, \texttt{\#println} and
+\texttt{\#errorlog}.} an error is also thrown. All other errors are handled by
+sending a suitable message to the \texttt{\#errorlog} process, and ignoring
+whatever operation fails. This gives the required
+
+The processes \texttt{\#println} and \texttt{\#errorlog} are special-cased,
+but still exist in the process table. All values except for their mailbox and
+process id are dummy values.
+
+Evaluating all possible outcomes is done without using a monad transformer,
+though it seems like it'd likely candidate to be rewritten to use one. In the
+same vein, the \texttt{ProgramEvaluation} monad could have been written using
+the state monad, as that essentially is what it is.
+
+\subsection{Assessment}
+The code style could most likely be improved; a lot of places checking has to
+be done to ensure that the input is correct. This leads to much unpacking of
+option types, verification of length of lists and so on. The monadic style
+does help simplify the transfer and maintenance of state, making it it simpler
+to work with.
+
+The code runs through \texttt{ghc-mod check} and \texttt{hlint} without any
+notices or warnings.
+
+Basic correctness checks are done by running the interpreter on the sample
+programs provided, as well as doing manual evaluation. Further correctness
+checking is a good idea, as the interpreter is rather complex, and subtle bugs
+easily could hide in the corners. To improve correctness checking, further
+programs could be written. In addition, quickcheck could be used to compare
+output to a reference implementation to further catch any bugs.
+
 \appendix
 \section{Code}
 \subsection{IVars in Erlang}
@@ -76,5 +180,16 @@ each IVar, and an IVar is created for each element in the list.
 \subsubsection{pmusetest.erl}
 \inputminted{erlang}{src/pm/pmusetest.erl}
 
+\subsection{Parsing Soil}
+\subsubsection{SoilParser.hs}
+\inputminted{haskell}{src/soil/SoilParser.hs}
+\subsubsection{SoilParserTest.hs}
+\inputminted{haskell}{src/soil/SoilParserTest.hs}
+
+\subsection{Interpreting Soil}
+\subsubsection{SoilInterp.hs}
+\inputminted{haskell}{src/soil/SoilInterp.hs}
+\subsubsection{SoilInterpTest.hs}
+\inputminted{haskell}{src/soil/SoilInterpTest.hs}
 \end{document}
 
